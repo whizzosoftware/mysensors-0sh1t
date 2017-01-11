@@ -9,8 +9,8 @@
  * Author: Dan Noguerol
  *
  * By default, connect a DHT (e.g. DHT22) sensor to digital 
- * pin 7, a water leak sensor to analog pin 0 and an MQ4 sensor 
- * to analog pin 1.
+ * pin 7, a water leak sensor to analog pin 0 and a gas sensor 
+ * (e.g. MQ5) to analog pin 1.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -24,6 +24,8 @@
 #define DHT_SENSOR
 // uncomment this to monitor a gas sensor
 #define GAS_SENSOR
+// uncomment this to activate a buzzer when the sensor is triggered
+#define BUZZER
 
 // Enable debug prints to serial monitor
 #define MY_DEBUG
@@ -46,12 +48,13 @@
 #define IDLE_THRESHOLD 60
 // the maximum allowable water leak sensor value before 0SH1T is considered "tripped"
 #define WATER_THRESHOLD 50
-// the maximum allowable gas sensor value before 0SH1T is considered "tripped"
-#define GAS_THRESHOLD   13
+// the minimum allowable gas sensor value before 0SH1T is considered "tripped"
+#define GAS_THRESHOLD   15
 
 #define WATER_LEAK_PIN A0
 #define GAS_SENSOR_PIN A1
 #define DHT_PIN 7
+#define BUZZER_PIN 5
 #define DHT_TYPE DHT22
 
 MyMessage msgTripped(PRIMARY_SENSOR_ID, V_TRIPPED);
@@ -73,6 +76,10 @@ void setup()
   #endif
   #ifdef DHT_SENSOR
     dht.begin();
+  #endif
+  #ifdef BUZZER
+    pinMode(BUZZER_PIN, OUTPUT);
+    digitalWrite(BUZZER_PIN, LOW);
   #endif
 }
 
@@ -96,7 +103,7 @@ void loop()
   static uint8_t sentHumValue = -1;
   
   static uint8_t idleThreshold;
-  
+
   #ifdef WATER_SENSOR
     uint8_t leakValue;
     leakValue = analogRead(WATER_LEAK_PIN);
@@ -135,14 +142,15 @@ void loop()
   #endif
 
   #ifdef GAS_SENSOR
-    float sensor_volt, RS_air, sensorValue, R0;
+    float sensor_volt, RS_air, sensorValue;
+    int R0;
     for (int x=0; x < 500; x++) {
       sensorValue = sensorValue + analogRead(GAS_SENSOR_PIN);
     }
     sensor_volt = (sensorValue / 500.0) * (5.0 / 1023.0);
     RS_air = ((5.0 * 10.0) / sensor_volt) - 10.0;
-    R0 = RS_air / 4.4;
-    trippedValue = max(trippedValue, R0 > GAS_THRESHOLD);
+    R0 = (int)(RS_air / 4.4);
+    trippedValue = max(trippedValue, R0 < GAS_THRESHOLD);
     #ifdef MY_DEBUG
       Serial.print(", R0: ");
       Serial.print(R0);
@@ -157,6 +165,14 @@ void loop()
   #ifdef MY_DEBUG
     Serial.print(", Tripped: ");
     Serial.print(trippedValue);
+  #endif
+
+  #ifdef BUZZER
+    if (sentTrippedValue > 0) {
+      digitalWrite(BUZZER_PIN, HIGH);
+    } else {
+      digitalWrite(BUZZER_PIN, LOW);
+    }
   #endif
 
   idleThreshold++;
